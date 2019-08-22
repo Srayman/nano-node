@@ -57,7 +57,7 @@ if [[ "${TEMP_OPTS[0]}" = 'nano_node' ]]; then
 			echo "Vacuum DB if over $db_size GB on startup"
 		elif [[ "$i" = '-l' ]]; then
 			echo "log_to_cerr = true"
-			log_to_cerr=1
+			command+=("--config logging.log_to_cerr=true")
 		else
 		 	command+=("$i")
 		fi
@@ -103,12 +103,6 @@ if [ [ ${tomlMissing} ] && [ ${jsonMissing} ] ]; then
 	echo "Config file not found, adding default."
 	cp "/usr/share/nano/config/config-node.toml" "${nanodir}/config-node.toml"
 	cp "/usr/share/nano/config/config-rpc.toml" "${nanodir}/config-rpc.toml"
-fi
-
-if [[ $log_to_cerr -eq 1 ]]; then
-	sed -i 's/log_to_cerr = false,/log_to_cerr = true,/g' "${nanodir}/config-node.toml"
-else
-	sed -i 's/log_to_cerr = true,/log_to_cerr = false,/g' "${nanodir}/config-node.toml"
 fi
 
 if [[ "${command[1]}" = "--daemon" ]]; then
