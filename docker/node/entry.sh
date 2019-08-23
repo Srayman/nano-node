@@ -57,7 +57,7 @@ if [[ "${TEMP_OPTS[0]}" = 'nano_node' ]]; then
 			echo "Vacuum DB if over $db_size GB on startup"
 		elif [[ "$i" = '-l' ]]; then
 			echo "log_to_cerr = true"
-			command+=("--config logging.log_to_cerr=true")
+			command+=("--config node.logging.log_to_cerr=true")
 		else
 		 	command+=("$i")
 		fi
