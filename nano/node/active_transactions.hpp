@@ -153,6 +153,11 @@ private:
 	void confirm_frontiers (nano::transaction const &);
 	nano::account next_frontier_account{ 0 };
 	std::chrono::steady_clock::time_point next_frontier_check{ std::chrono::steady_clock::now () };
+//    std::chrono::steady_clock::time_point loop_start_time{ std::chrono::steady_clock::now () };
+//    std::chrono::steady_clock::time_point time_after_frontier{ std::chrono::steady_clock::now () };
+    std::chrono::steady_clock::time_point time_after_loop{ std::chrono::steady_clock::now () };
+//    std::chrono::steady_clock::time_point time_after_broadcast{ std::chrono::steady_clock::now () };
+//    std::chrono::steady_clock::time_point time_after_difficulty{ std::chrono::steady_clock::now () };
 	nano::condition_variable condition;
 	bool started{ false };
 	std::atomic<bool> stopped{ false };

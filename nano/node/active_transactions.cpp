@@ -14,6 +14,7 @@ election_request_delay (node.network_params.network.is_test_network () ? 0s : 1s
 multipliers_cb (20, 1.),
 trended_active_difficulty (node.network_params.network.publish_threshold),
 next_frontier_check (steady_clock::now ()),
+time_after_loop (steady_clock::now ()),
 thread ([this]() {
 	nano::thread_role::set (nano::thread_role::name::request_loop);
 	request_loop ();
