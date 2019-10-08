@@ -1,5 +1,6 @@
 #include <nano/node/node.hpp>
 #include <nano/node/socket.hpp>
+#include <nano/node/websocket.hpp>
 
 #include <limits>
 
@@ -69,11 +70,18 @@ void nano::socket::async_write (nano::shared_const_buffer const & buffer_a, std:
 			boost::asio::post (strand, boost::asio::bind_executor (strand, [buffer_a, callback_a, this_l]() {
 				bool write_in_progress = !this_l->send_queue.empty ();
 				auto queue_size = this_l->send_queue.size ();
+                auto remote_ip = this_l->remote;
+                auto node_l = this_l->node.lock ();
+                if (node_l && queue_size > 0 && (queue_size % 128 == 0 || queue_size >= 900) && node_l->websocket_server && node_l->websocket_server->any_subscriber (nano::websocket::topic::message_queue))
+                {
+                    nano::websocket::message_builder builder;
+                    node_l->websocket_server->broadcast (builder.message_queue_size (remote_ip, queue_size));
+                }
 				if (queue_size < this_l->queue_size_max)
 				{
 					this_l->send_queue.emplace_back (nano::socket::queue_item{ buffer_a, callback_a });
 				}
-				else if (auto node_l = this_l->node.lock ())
+				else if (node_l)
 				{
 					node_l->stats.inc (nano::stat::type::tcp, nano::stat::detail::tcp_write_drop, nano::stat::dir::out);
 				}

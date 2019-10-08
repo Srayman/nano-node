@@ -5,7 +5,15 @@
 
 #include <numeric>
 
-using namespace std::chrono;
+using namespace std::chrono; 
+std::chrono::steady_clock::time_point loop_start_time{ std::chrono::steady_clock::now () };
+std::chrono::steady_clock::time_point time_after_frontier{ std::chrono::steady_clock::now () };
+std::chrono::steady_clock::time_point time_after_loop{ std::chrono::steady_clock::now () };
+std::chrono::steady_clock::time_point time_after_broadcast{ std::chrono::steady_clock::now () };
+std::chrono::steady_clock::time_point time_after_difficulty{ std::chrono::steady_clock::now () };
+size_t before_frontiers_size;
+size_t after_frontiers_size;
+size_t end_size;
 
 nano::active_transactions::active_transactions (nano::node & node_a) :
 node (node_a),
@@ -14,7 +22,11 @@ election_request_delay (node.network_params.network.is_test_network () ? 0s : 1s
 multipliers_cb (20, 1.),
 trended_active_difficulty (node.network_params.network.publish_threshold),
 next_frontier_check (steady_clock::now ()),
-time_after_loop (steady_clock::now ()),
+//loop_start_time (steady_clock::now ()),
+//time_after_frontier (steady_clock::now ()),
+//time_after_loop (steady_clock::now ()),
+//time_after_broadcast (steady_clock::now ()),
+//time_after_difficulty (steady_clock::now ()),
 thread ([this]() {
 	nano::thread_role::set (nano::thread_role::name::request_loop);
 	request_loop ();
@@ -161,13 +173,16 @@ void nano::active_transactions::request_confirm (nano::unique_lock<std::mutex> &
 	/* Confirm frontiers when there aren't many confirmations already pending and node finished initial bootstrap
 	In auto mode start confirm only if node contains almost principal representative (half of required for principal weight) */
 	lock_a.unlock ();
+    before_frontiers_size = size ();
 	if (node.config.frontiers_confirmation != nano::frontiers_confirmation_mode::disabled && node.ledger.block_count_cache > node.ledger.cemented_count + roots.size () && node.pending_confirmation_height.size () < confirmed_frontiers_max_pending_cut_off && node.ledger.block_count_cache >= node.ledger.bootstrap_weight_max_blocks)
 	{
 		confirm_frontiers (transaction);
 	}
+    time_after_frontier = steady_clock::now ();
 	lock_a.lock ();
 	auto const reps (node.rep_crawler.representatives (std::numeric_limits<size_t>::max ()));
 	auto roots_size (roots.size ());
+    after_frontiers_size = roots_size;
 	// Any new request is only done at least 1 second after the election started
 	auto cutoff_l (std::chrono::steady_clock::now () - election_request_delay);
 	auto long_election_cutoff_l (std::chrono::steady_clock::now () - long_election_threshold);
@@ -336,7 +351,7 @@ void nano::active_transactions::request_confirm (nano::unique_lock<std::mutex> &
 			}
 		}
 	}
-
+    time_after_loop = steady_clock::now ();
 	lock_a.unlock ();
 	// Rebroadcast unconfirmed blocks
 	if (!blocks_bundle.empty ())
@@ -369,6 +384,7 @@ void nano::active_transactions::request_confirm (nano::unique_lock<std::mutex> &
 		10); // 500ms / (10-20ms / 1 req) > 15 reqs
 	}
 	lock_a.lock ();
+    time_after_broadcast = steady_clock::now ();
 	// Erase inactive elections
 	for (auto i (inactive.begin ()), n (inactive.end ()); i != n; ++i)
 	{
@@ -384,6 +400,11 @@ void nano::active_transactions::request_confirm (nano::unique_lock<std::mutex> &
 
 void nano::active_transactions::request_loop ()
 {
+    loop_start_time = steady_clock::now ();
+    time_after_frontier = steady_clock::now ();
+    time_after_loop = steady_clock::now ();
+    time_after_broadcast = steady_clock::now ();
+    time_after_difficulty = steady_clock::now ();
 	nano::unique_lock<std::mutex> lock (mutex);
 	started = true;
 	lock.unlock ();
@@ -397,9 +418,10 @@ void nano::active_transactions::request_loop ()
 
 	while (!stopped)
 	{
+        loop_start_time = steady_clock::now ();
 		request_confirm (lock);
 		update_active_difficulty (lock);
-
+        time_after_difficulty = steady_clock::now ();
 		// Sleep until all broadcasts are done, plus the remaining loop time
 		const auto wakeup (std::chrono::steady_clock::now () + std::chrono::milliseconds (node.network_params.network.request_interval_ms));
 		while (!stopped && ongoing_broadcasts)
@@ -412,6 +434,9 @@ void nano::active_transactions::request_loop ()
 			condition.wait_until (lock, wakeup, [&wakeup, &stopped = stopped] { return stopped || std::chrono::steady_clock::now () >= wakeup; });
 			// clang-format on
 		}
+        auto end_time = std::chrono::steady_clock::now ();
+        auto timestamp = std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
+        std::cout << timestamp << ", " << before_frontiers_size << ", " << after_frontiers_size << ", " << roots.size () << ", " << std::chrono::duration_cast<std::chrono::microseconds> (end_time-loop_start_time).count() << ", " << std::chrono::duration_cast<std::chrono::microseconds> (time_after_frontier-loop_start_time).count()  << ", " << std::chrono::duration_cast<std::chrono::microseconds> (time_after_loop-time_after_frontier).count() << ", " << std::chrono::duration_cast<std::chrono::microseconds> (time_after_broadcast-time_after_loop).count() << ", " << std::chrono::duration_cast<std::chrono::microseconds> (time_after_difficulty-time_after_broadcast).count() << "\n";
 	}
 }
 
