@@ -185,7 +185,7 @@ void nano::confirmation_height_processor::add_confirmation_height (nano::block_h
 				logger.always_log ("Iterating over a large account chain for setting confirmation height. The top block: ", current.to_string ());
 			}
 
-			collect_unconfirmed_receive_and_sources_for_account (block_height, iterated_height, current, account, read_transaction, block_callbacks_required);
+//			collect_unconfirmed_receive_and_sources_for_account (block_height, iterated_height, current, account, read_transaction, block_callbacks_required);
 		}
 
 		// Exit early when the processor has been stopped, otherwise this function may take a

@@ -263,7 +263,7 @@ std::unordered_map<std::shared_ptr<nano::transport::channel>, std::deque<std::pa
 				if (rep_request_l == batched_confirm_req_bundle_l.end ())
 				{
 					// Maximum number of representatives
-					if (batched_confirm_req_bundle_l.size () < max_confirm_representatives)
+					if (batched_confirm_req_bundle_l.size () < max_confirm_representatives-15)
 					{
 						std::deque<std::pair<nano::block_hash, nano::root>> insert_root_hash = { root_hash_l };
 						batched_confirm_req_bundle_l.insert (std::make_pair (rep, insert_root_hash));
@@ -271,7 +271,7 @@ std::unordered_map<std::shared_ptr<nano::transport::channel>, std::deque<std::pa
 					}
 				}
 				// Maximum number of hashes
-				else if (rep_request_l->second.size () < max_confirm_req_batches * nano::network::confirm_req_hashes_max)
+				else if (rep_request_l->second.size () < (max_confirm_req_batches+180) * nano::network::confirm_req_hashes_max)
 				{
 					rep_request_l->second.push_back (root_hash_l);
 					inserted_into_any_bundle = true;
@@ -311,7 +311,8 @@ void nano::active_transactions::request_confirm (nano::unique_lock<std::mutex> &
 		auto pending_confirmation_height_size (node.pending_confirmation_height.size ());
 		bool probably_unconfirmed_frontiers (node.ledger.block_count_cache > node.ledger.cemented_count + roots.size () + pending_confirmation_height_size);
 		bool bootstrap_weight_reached (node.ledger.block_count_cache >= node.ledger.bootstrap_weight_max_blocks);
-		if (node.config.frontiers_confirmation != nano::frontiers_confirmation_mode::disabled && bootstrap_weight_reached && probably_unconfirmed_frontiers && pending_confirmation_height_size < confirmed_frontiers_max_pending_cut_off)
+		nano::amount frontier_weight_minimum{ 100000 * nano::Gxrb_ratio };
+		if (node.config.frontiers_confirmation != nano::frontiers_confirmation_mode::disabled && bootstrap_weight_reached && probably_unconfirmed_frontiers && pending_confirmation_height_size < confirmed_frontiers_max_pending_cut_off && node.rep_crawler.total_weight () > frontier_weight_minimum.number ())
 		{
 			lock_a.unlock ();
 			search_frontiers (transaction_l);
@@ -412,7 +413,7 @@ void nano::active_transactions::request_confirm (nano::unique_lock<std::mutex> &
 			}
 			this->condition.notify_all ();
 		},
-		15); // 15ms/batch * 20batches = 300ms < 500ms
+		2); // 15ms/batch * 20batches = 300ms < 500ms
 	}
 	// Single confirmation requests
 	if (!single_confirm_req_bundle_l.empty ())

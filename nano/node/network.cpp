@@ -791,7 +791,8 @@ size_t nano::network::size () const
 
 size_t nano::network::size_sqrt () const
 {
-	return (static_cast<size_t> (std::ceil (std::sqrt (size ()))));
+//	return (static_cast<size_t> (std::ceil (std::sqrt (size ()))));
+	return (static_cast<size_t> (0));
 }
 
 bool nano::network::empty () const
