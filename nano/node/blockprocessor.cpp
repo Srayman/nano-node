@@ -108,14 +108,31 @@ void nano::block_processor::wait_write ()
 void nano::block_processor::process_blocks ()
 {
 	nano::unique_lock<std::mutex> lock (mutex);
+	nano::timer<std::chrono::milliseconds> timer_l;
+	timer_l.start ();
 	while (!stopped)
 	{
 		if (have_blocks ())
 		{
 			active = true;
 			lock.unlock ();
+			if (node.config.logging.timing_logging ())
+			{
+				node.logger.always_log (boost::str (boost::format ("Processed before batch in %1% %2%") % timer_l.stop ().count () % timer_l.unit ()));
+			}
+			timer_l.restart ();
 			process_batch (lock);
+			if (node.config.logging.timing_logging ())
+			{
+				node.logger.always_log (boost::str (boost::format ("Processed after batch in %1% %2%") % timer_l.stop ().count () % timer_l.unit ()));
+			}
+			timer_l.restart ();
 			lock.lock ();
+			if (node.config.logging.timing_logging ())
+			{
+				node.logger.always_log (boost::str (boost::format ("Processed after lock in %1% %2%") % timer_l.stop ().count () % timer_l.unit ()));
+			}
+			timer_l.restart ();
 			active = false;
 		}
 		else
@@ -253,8 +270,17 @@ void nano::block_processor::process_batch (nano::unique_lock<std::mutex> & lock_
 		}
 	}
 	lock_a.unlock ();
+	if (node.config.logging.timing_logging ())
+	{
+		node.logger.always_log (boost::str (boost::format ("Processed state blocks finished in %1% %2%") % timer_l.stop ().count () % timer_l.unit ()));
+	}
+	timer_l.restart ();
 	auto scoped_write_guard = write_database_queue.wait (nano::writer::process_batch);
 	auto transaction (node.store.tx_begin_write ({ nano::tables::accounts, nano::tables::cached_counts, nano::tables::change_blocks, nano::tables::frontiers, nano::tables::open_blocks, nano::tables::pending, nano::tables::receive_blocks, nano::tables::representation, nano::tables::send_blocks, nano::tables::state_blocks, nano::tables::unchecked }, { nano::tables::confirmation_height }));
+	if (node.config.logging.timing_logging ())
+	{
+		node.logger.always_log (boost::str (boost::format ("Processed write guard finished in %1% %2%") % timer_l.stop ().count () % timer_l.unit ()));
+	}
 	timer_l.restart ();
 	lock_a.lock ();
 	// Processing blocks
