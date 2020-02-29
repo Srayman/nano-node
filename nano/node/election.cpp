@@ -253,7 +253,7 @@ void nano::election::broadcast_block ()
 	}
 }
 
-bool nano::election::transition_time (bool const saturated_a)
+bool nano::election::transition_time (bool const saturated_a, bool const active_a)
 {
 	debug_assert (!node.active.mutex.try_lock ());
 	nano::unique_lock<std::mutex> lock (timepoints_mutex);
@@ -264,7 +264,8 @@ bool nano::election::transition_time (bool const saturated_a)
 			break;
 		case nano::election::state_t::passive:
 		{
-			if (base_latency () * passive_duration_factor < std::chrono::steady_clock::now () - state_start)
+//			if ((base_latency () * passive_duration_factor < std::chrono::steady_clock::now () - state_start))
+			if (active_a)
 			{
 				state_change (nano::election::state_t::passive, nano::election::state_t::active);
 			}

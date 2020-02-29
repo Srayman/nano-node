@@ -241,10 +241,19 @@ void nano::active_transactions::request_confirm (nano::unique_lock<std::mutex> &
 	 * Elections extending the soft config.active_elections_size limit are flushed after a certain time-to-live cutoff
 	 * Flushed elections are later re-activated via frontier confirmation
 	 */
-	for (auto i = sorted_roots_l.begin (), n = sorted_roots_l.end (); i != n; ++count_l)
+	for (auto i = sorted_roots_l.begin (), n = sorted_roots_l.end (); i != n;)
 	{
 		auto & election_l (i->election);
-		if ((count_l >= node.config.active_elections_size && election_l->election_start < election_ttl_cutoff_l && !node.wallets.watcher->is_watched (i->root)) || election_l->transition_time (saturated_l))
+		bool active_l = false;
+		if(!election_l->confirmed ())
+		{
+			++count_l;
+		}
+		if (count_l < 3000 && election_l->election_start < (std::chrono::steady_clock::now () - 1s))
+		{
+			active_l = true;
+		}
+		if ((count_l >= node.config.active_elections_size && election_l->election_start < election_ttl_cutoff_l && !node.wallets.watcher->is_watched (i->root)) || election_l->transition_time (saturated_l, active_l))
 		{
 			election_l->clear_blocks ();
 			i = sorted_roots_l.erase (i);

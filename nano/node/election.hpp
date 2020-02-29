@@ -66,7 +66,7 @@ private: // State management
 		expired_unconfirmed
 	};
 	static int constexpr passive_duration_factor = 5;
-	static int constexpr active_duration_factor = 20;
+	static int constexpr active_duration_factor = 60;
 	static int constexpr confirmed_duration_factor = 10;
 	static int constexpr confirmed_duration_factor_saturated = 1;
 	std::atomic<nano::election::state_t> state_m = { state_t::idle };
@@ -101,7 +101,7 @@ public:
 	void insert_inactive_votes_cache (nano::block_hash const &);
 
 public: // State transitions
-	bool transition_time (bool const saturated);
+	bool transition_time (bool const saturated, bool const active_a);
 	void transition_passive ();
 	void transition_active ();
 
