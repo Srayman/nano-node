@@ -76,9 +76,9 @@ void nano::rocksdb_store::open (bool & error_a, boost::filesystem::path const & 
 {
 	std::initializer_list<const char *> names{ rocksdb::kDefaultColumnFamilyName.c_str (), "frontiers", "accounts", "send", "receive", "open", "change", "state_blocks", "pending", "representation", "unchecked", "vote", "online_weight", "meta", "peers", "cached_counts", "confirmation_height" };
 	std::vector<rocksdb::ColumnFamilyDescriptor> column_families;
-	for (const auto & cf_name : names)
+	for (std::string cf_name : names)
 	{
-		column_families.emplace_back (cf_name, get_cf_options ());
+		column_families.emplace_back (cf_name, get_cf_options (cf_name));
 	}
 
 	auto options = get_db_options ();
@@ -440,7 +440,7 @@ int nano::rocksdb_store::clear (rocksdb::ColumnFamilyHandle * column_family)
 	// Need to add it back as we just want to clear the contents
 	auto handle_it = std::find (handles.begin (), handles.end (), column_family);
 	debug_assert (handle_it != handles.cend ());
-	status = db->CreateColumnFamily (get_cf_options (), name, &column_family);
+	status = db->CreateColumnFamily (get_cf_options (name), name, &column_family);
 	release_assert (status.ok ());
 	*handle_it = column_family;
 	return status.code ();
@@ -464,7 +464,8 @@ rocksdb::Options nano::rocksdb_store::get_db_options () const
 	db_options.compaction_pri = rocksdb::CompactionPri::kMinOverlappingRatio;
 
 	// Start aggressively flushing WAL files when they reach over 1GB
-	db_options.max_total_wal_size = 1 * 1024 * 1024 * 1024LL;
+//	db_options.max_total_wal_size = 1 * 1024 * 1024 * 1024LL;
+	db_options.max_total_wal_size = 1024ULL * 1024 * 8 * rocksdb_config.memtable_size;
 
 	// Optimize RocksDB. This is the easiest way to get RocksDB to perform well
 	db_options.IncreaseParallelism (rocksdb_config.io_threads);
@@ -475,6 +476,15 @@ rocksdb::Options nano::rocksdb_store::get_db_options () const
 
 	// Total size of memtables across column families. This can be used to manage the total memory used by memtables.
 	db_options.db_write_buffer_size = rocksdb_config.total_memtable_size * 1024 * 1024ULL;
+	
+	//https://github.com/facebook/rocksdb/wiki/Thread-Pool
+	db_options.max_background_jobs = 4;
+	
+	//https://github.com/facebook/rocksdb/wiki/Statistics
+	db_options.statistics = rocksdb::CreateDBStatistics();
+	
+	//https://github.com/facebook/rocksdb/wiki/Compression
+	db_options.compression = rocksdb::CompressionType::kNoCompression;
 
 	return db_options;
 }
@@ -499,38 +509,121 @@ rocksdb::BlockBasedTableOptions nano::rocksdb_store::get_table_options () const
 	// Whether index and filter blocks are stored in block_cache. These settings should be synced
 	table_options.cache_index_and_filter_blocks = rocksdb_config.cache_index_and_filter_blocks;
 	table_options.pin_l0_filter_and_index_blocks_in_cache = rocksdb_config.cache_index_and_filter_blocks;
-
+	
+	//https://github.com/facebook/rocksdb/wiki/Partitioned-Index-Filters
+//	table_options.index_type = rocksdb::BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch;
+//	table_options.partition_filters = true;
+//	table_options.metadata_block_size = 4096;
+//	table_options.pin_top_level_index_and_filter = true;
+//	table_options.cache_index_and_filter_blocks_with_high_priority = true;
+	
+	//https://rocksdb.org/blog/2018/08/23/data-block-hash-index.html
+//	table_options.data_block_index_type = table_options.kDataBlockBinaryAndHash;
+	
 	return table_options;
 }
 
-rocksdb::ColumnFamilyOptions nano::rocksdb_store::get_cf_options () const
+rocksdb::ColumnFamilyOptions nano::rocksdb_store::get_cf_options (std::string name_a) const
 {
 	rocksdb::ColumnFamilyOptions cf_options;
 	cf_options.table_factory = table_factory;
 
-	// Number of files in level which triggers compaction. Size of L0 and L1 should be kept similar as this is the only compaction which is single threaded
-	cf_options.level0_file_num_compaction_trigger = 4;
+	std::vector<std::string> tiny{"unchecked", "peers"};
+	std::vector<std::string> medium{"online_weight", "cached_counts", "confirmation_height"};
+	if (std::find(std::begin(tiny), std::end(tiny), name_a) != std::end(tiny))
+	{
+		// Number of files in level which triggers compaction. Size of L0 and L1 should be kept similar as this is the only compaction which is single threaded
+		cf_options.level0_file_num_compaction_trigger = 1;
 
-	// L1 size, compaction is triggered for L0 at this size (4 SST files in L1)
-	cf_options.max_bytes_for_level_base = 1024ULL * 1024 * 4 * rocksdb_config.memtable_size;
+		// L1 size, compaction is triggered for L0 at this size (4 SST files in L1)
+		cf_options.max_bytes_for_level_base = 1024ULL * 1024 * 2 * rocksdb_config.memtable_size / 8;
 
-	// Each level is a multiple of the above. If L1 is 512MB. L2 will be 512 * 8 = 2GB. L3 will be 2GB * 8 = 16GB, and so on...
-	cf_options.max_bytes_for_level_multiplier = 8;
+		// Each level is a multiple of the above. If L1 is 512MB. L2 will be 512 * 8 = 2GB. L3 will be 2GB * 8 = 16GB, and so on...
+		cf_options.max_bytes_for_level_multiplier = 8;
 
-	// Files older than this (1 day) will be scheduled for compaction when there is no other background work. This can lead to more writes however.
-	cf_options.ttl = 1 * 24 * 60 * 60;
+		// Files older than this (1 day) will be scheduled for compaction when there is no other background work. This can lead to more writes however.
+		cf_options.ttl = 1 * 24 * 60 * 60;
+	//	cf_options.ttl = 15 * 60;
 
-	// Size of level 1 sst files
-	cf_options.target_file_size_base = 1024ULL * 1024 * rocksdb_config.memtable_size;
+		// Size of level 1 sst files https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
+		cf_options.target_file_size_base = 1024ULL * 1024 * rocksdb_config.memtable_size / 8;
+		cf_options.target_file_size_multiplier = 2;
 
-	// Size of each memtable
-	cf_options.write_buffer_size = 1024ULL * 1024 * rocksdb_config.memtable_size;
+		// Size of each memtable
+		cf_options.write_buffer_size = 1024ULL * 1024 * rocksdb_config.memtable_size / 8;
 
-	// Size target of levels are changed dynamically based on size of the last level
-	cf_options.level_compaction_dynamic_level_bytes = true;
+		// Size target of levels are changed dynamically based on size of the last level
+		cf_options.level_compaction_dynamic_level_bytes = true;
 
-	// Number of memtables to keep in memory (1 active, rest inactive/immutable)
-	cf_options.max_write_buffer_number = rocksdb_config.num_memtables;
+		// Number of memtables to keep in memory (1 active, rest inactive/immutable)
+		cf_options.max_write_buffer_number = rocksdb_config.num_memtables;		
+		
+		cf_options.min_write_buffer_number_to_merge = 2;
+		
+	//	cf_options.max_successive_merges = 1000;
+	} else if (std::find(std::begin(medium), std::end(medium), name_a) != std::end(medium))
+	{
+		// Number of files in level which triggers compaction. Size of L0 and L1 should be kept similar as this is the only compaction which is single threaded
+		cf_options.level0_file_num_compaction_trigger = 2;
+
+		// L1 size, compaction is triggered for L0 at this size (4 SST files in L1)
+		cf_options.max_bytes_for_level_base = 1024ULL * 1024  * 4 * rocksdb_config.memtable_size / 4;
+
+		// Each level is a multiple of the above. If L1 is 512MB. L2 will be 512 * 8 = 2GB. L3 will be 2GB * 8 = 16GB, and so on...
+		cf_options.max_bytes_for_level_multiplier = 8;
+
+		// Files older than this (1 day) will be scheduled for compaction when there is no other background work. This can lead to more writes however.
+		cf_options.ttl = 1 * 24 * 60 * 60;
+	//	cf_options.ttl = 15 * 60;
+
+		// Size of level 1 sst files https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
+		cf_options.target_file_size_base = 1024ULL * 1024 * rocksdb_config.memtable_size / 4;
+		cf_options.target_file_size_multiplier = 2;
+
+		// Size of each memtable
+		cf_options.write_buffer_size = 1024ULL * 1024 * rocksdb_config.memtable_size / 4;
+
+		// Size target of levels are changed dynamically based on size of the last level
+		cf_options.level_compaction_dynamic_level_bytes = true;
+
+		// Number of memtables to keep in memory (1 active, rest inactive/immutable)
+		cf_options.max_write_buffer_number = rocksdb_config.num_memtables;		
+		
+		cf_options.min_write_buffer_number_to_merge = 2;
+		
+	//	cf_options.max_successive_merges = 1000;
+	} else
+	{
+		// Number of files in level which triggers compaction. Size of L0 and L1 should be kept similar as this is the only compaction which is single threaded
+		cf_options.level0_file_num_compaction_trigger = 4;
+
+		// L1 size, compaction is triggered for L0 at this size (4 SST files in L1)
+		cf_options.max_bytes_for_level_base = 1024ULL * 1024 * 8 * rocksdb_config.memtable_size;
+
+		// Each level is a multiple of the above. If L1 is 512MB. L2 will be 512 * 8 = 2GB. L3 will be 2GB * 8 = 16GB, and so on...
+		cf_options.max_bytes_for_level_multiplier = 8;
+
+		// Files older than this (1 day) will be scheduled for compaction when there is no other background work. This can lead to more writes however.
+		cf_options.ttl = 1 * 24 * 60 * 60;
+	//	cf_options.ttl = 15 * 60;
+
+		// Size of level 1 sst files https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
+		cf_options.target_file_size_base = 1024ULL * 1024 * rocksdb_config.memtable_size;
+		cf_options.target_file_size_multiplier = 2;
+
+		// Size of each memtable
+		cf_options.write_buffer_size = 1024ULL * 1024 * rocksdb_config.memtable_size;
+
+		// Size target of levels are changed dynamically based on size of the last level
+		cf_options.level_compaction_dynamic_level_bytes = true;
+
+		// Number of memtables to keep in memory (1 active, rest inactive/immutable)
+		cf_options.max_write_buffer_number = rocksdb_config.num_memtables;
+		
+		cf_options.min_write_buffer_number_to_merge = 2;
+		
+	//	cf_options.max_successive_merges = 1000;
+	}
 
 	return cf_options;
 }

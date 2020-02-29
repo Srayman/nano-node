@@ -98,7 +98,7 @@ private:
 
 	int increment (nano::write_transaction const & transaction_a, tables table_a, nano::rocksdb_val const & key_a, uint64_t amount_a);
 	int decrement (nano::write_transaction const & transaction_a, tables table_a, nano::rocksdb_val const & key_a, uint64_t amount_a);
-	rocksdb::ColumnFamilyOptions get_cf_options () const;
+	rocksdb::ColumnFamilyOptions get_cf_options (std::string name_a) const;
 	void construct_column_family_mutexes ();
 	rocksdb::Options get_db_options () const;
 	rocksdb::BlockBasedTableOptions get_table_options () const;
