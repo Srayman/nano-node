@@ -271,14 +271,17 @@ void nano::block_processor::process_live (nano::block_hash const & hash_a, std::
 	{
 		node.wallets.watcher->add (block_a);
 	}
-
+//	auto milli_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
+//	std::cout <<  std::to_string (milli_since_epoch) <<  " - New Block" << std::endl;
 	// Start collecting quorum on block
-	auto election = node.active.insert (block_a, process_return_a.previous_balance.number ());
+/*	auto election = node.active.insert (block_a, process_return_a.previous_balance.number ());
 	if (election.inserted)
 	{
 		election.election->transition_passive ();
 	}
-
+*/
+	node.vote_processor.block (block_a, process_return_a.previous_balance.number ());
+	
 	// Announce block contents to the network
 	if (initial_publish_a)
 	{

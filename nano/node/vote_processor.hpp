@@ -43,9 +43,14 @@ public:
 	bool empty ();
 	void calculate_weights ();
 	void stop ();
+	
+	bool block (std::shared_ptr<nano::block>, boost::optional<nano::uint128_t>);
+	size_t block_size ();
+	bool block_empty ();
 
 private:
 	void process_loop ();
+	void process_blocks();
 
 	nano::signature_checker & checker;
 	nano::active_transactions & active;
@@ -60,12 +65,14 @@ private:
 	size_t max_votes;
 
 	std::deque<std::pair<std::shared_ptr<nano::vote>, std::shared_ptr<nano::transport::channel>>> votes;
+	std::deque<std::pair<std::shared_ptr<nano::block>, boost::optional<nano::uint128_t>>> blocks;
 	/** Representatives levels for random early detection */
 	std::unordered_set<nano::account> representatives_1;
 	std::unordered_set<nano::account> representatives_2;
 	std::unordered_set<nano::account> representatives_3;
 	nano::condition_variable condition;
 	std::mutex mutex;
+	std::mutex block_mutex;
 	bool started;
 	bool stopped;
 	bool is_active;

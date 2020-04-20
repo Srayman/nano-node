@@ -45,6 +45,8 @@ void nano::election::confirm_once (nano::election_status_type type_a)
 	nano::unique_lock<std::mutex> election_winners_lk (node.active.election_winner_details_mutex);
 	if (state_m.exchange (nano::election::state_t::confirmed) != nano::election::state_t::confirmed)
 	{
+//		auto milli_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
+//		std::cout <<  std::to_string (milli_since_epoch) <<  " - Block Confirmed" << std::endl;
 		status.election_end = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ());
 		status.election_duration = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now () - election_start);
 		status.confirmation_request_count = confirmation_request_count;
