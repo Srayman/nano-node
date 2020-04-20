@@ -52,13 +52,9 @@ void nano::vote_processor::process_loop ()
 
 	while (!stopped)
 	{
-//		auto milli_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
-//		std::cout <<  std::to_string (milli_since_epoch) <<  " - LOOP" << std::endl;
 		if(!blocks.empty())
 		{
 			is_active = true;
-//			milli_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
-//			std::cout <<  std::to_string (milli_since_epoch) <<  " - Processing Blocks Outer" << std::endl;
 			lock.unlock ();
 			process_blocks();
 			lock.lock ();
@@ -171,8 +167,6 @@ void nano::vote_processor::verify_votes (decltype (votes) const & votes_a)
 	{
 		if(!blocks.empty())
 		{
-//			auto milli_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
-//			std::cout <<  std::to_string (milli_since_epoch) <<  " - Processing Blocks Inner" << std::endl;
 			process_blocks();
 		}
 		debug_assert (verifications[i] == 1 || verifications[i] == 0);
@@ -289,8 +283,6 @@ bool nano::vote_processor::block (std::shared_ptr<nano::block> block_a, boost::o
 	bool process (true);
 	if (!stopped)
 	{
-//		auto milli_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
-//		std::cout <<  std::to_string (milli_since_epoch) <<  " - Adding Block" << std::endl;
 		nano::unique_lock<std::mutex> lk (block_mutex);
 		blocks.emplace_back (block_a, previous_balance_a);	
 		lk.unlock ();
@@ -319,39 +311,13 @@ void nano::vote_processor::process_blocks()
 	
 	for (auto const & block : blocks)
 	{
-//		auto milli_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
-//		std::cout <<  std::to_string (milli_since_epoch) <<  " - Processing Block" << std::endl;
 		auto election = active.insert (block.first, block.second);
 		if (election.inserted)
 		{
 			election.election->transition_passive ();
 		}
-//		milli_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
-//		std::cout <<  std::to_string (milli_since_epoch) <<  " - Done Processing Block" << std::endl;
 	}
 }
-/*
-void nano::vote_processor::process_blocks()
-{
-	nano::unique_lock<std::mutex> lock (mutex);
-	decltype (blocks) blocks_l;
-	blocks_l.swap (blocks);
-	lock.unlock ();
-	
-	for (auto const & block : blocks_l)
-	{
-//		auto milli_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
-//		std::cout <<  std::to_string (milli_since_epoch) <<  " - Processing Block" << std::endl;
-		auto election = active.insert (block.first, block.second);
-		if (election.inserted)
-		{
-			election.election->transition_passive ();
-		}
-//		milli_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
-//		std::cout <<  std::to_string (milli_since_epoch) <<  " - Done Processing Block" << std::endl;
-	}
-}
-*/
 
 std::unique_ptr<nano::container_info_component> nano::collect_container_info (vote_processor & vote_processor, const std::string & name)
 {
