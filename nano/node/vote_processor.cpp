@@ -309,7 +309,7 @@ void nano::vote_processor::process_blocks()
 	blocks_l.swap (blocks);
 	lk.unlock ();
 	
-	for (auto const & block : blocks)
+	for (auto const & block : blocks_l)
 	{
 		auto election = active.insert (block.first, block.second);
 		if (election.inserted)
