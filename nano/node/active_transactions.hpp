@@ -266,7 +266,10 @@ private:
 	std::chrono::seconds const election_time_to_live;
 
 	// Elections above this position in the queue are prioritized
-	size_t const prioritized_cutoff;
+	const size_t base_prioritized_cutoff;
+	size_t prioritized_cutoff;
+
+	std::vector<std::pair<std::chrono::steady_clock::time_point, size_t>> cemented_samples;
 
 	static size_t constexpr recently_confirmed_size{ 65536 };
 	using recent_confirmation = std::pair<nano::qualified_root, nano::block_hash>;

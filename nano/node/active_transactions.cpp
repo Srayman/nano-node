@@ -27,7 +27,8 @@ trended_active_multiplier (1.0),
 generator (node_a.config, node_a.ledger, node_a.wallets, node_a.vote_processor, node_a.history, node_a.network, node_a.stats),
 check_all_elections_period (node_a.network_params.network.is_dev_network () ? 10ms : 5s),
 election_time_to_live (node_a.network_params.network.is_dev_network () ? 0s : 2s),
-prioritized_cutoff (std::max<size_t> (1, node_a.config.active_elections_size / 10)),
+base_prioritized_cutoff (std::max<size_t> (1, node_a.config.active_elections_size / 200)),
+prioritized_cutoff (base_prioritized_cutoff),
 thread ([this]() {
 	nano::thread_role::set (nano::thread_role::name::request_loop);
 	request_loop ();
@@ -582,6 +583,16 @@ void nano::active_transactions::request_loop ()
 		lock.lock ();
 
 		const auto stamp_l = std::chrono::steady_clock::now ();
+		// Collect cemented count samples over 20 intervals (roughly 10 seconds) and generate a rolling confirmation rate
+		cemented_samples.emplace_back (stamp_l, node.ledger.cache.cemented_count.load ());
+		if (cemented_samples.size () > 20)
+		{
+			auto duration = std::chrono::duration_cast<std::chrono::milliseconds> (cemented_samples.back ().first - cemented_samples.front ().first).count ();
+			auto cps = 1000 * (cemented_samples.back ().second - cemented_samples.front ().second) / duration;
+			// Set the prioritized cutoff to the max of the rolling confirmation rate or the base cutoff
+			prioritized_cutoff = std::max<size_t> (base_prioritized_cutoff, cps);
+			cemented_samples.erase (cemented_samples.begin ());
+		}
 
 		// frontiers_confirmation should be above update_active_multiplier to ensure new sorted roots are updated
 		if (should_do_frontiers_confirmation ())
