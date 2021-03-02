@@ -69,6 +69,7 @@ private: // State management
 	enum class state_t
 	{
 		passive, // only listening for incoming votes
+		prioritized, // generating local vote and listening for other votes
 		active, // actively request confirmations
 		broadcasting, // request confirmations and broadcast the winner
 		confirmed, // confirmed but still listening for votes
@@ -160,7 +161,7 @@ private:
 public: // Only used in tests
 	void force_confirm (nano::election_status_type = nano::election_status_type::active_confirmed_quorum);
 	std::unordered_map<nano::account, nano::vote_info> votes () const;
-	std::vector<nano::vote_with_weight_info> votes_with_weight () const;
+	std::vector<nano::vote_with_weight_info> votes_with_weight (bool local_a = false) const;
 	std::unordered_map<nano::block_hash, std::shared_ptr<nano::block>> blocks () const;
 
 	friend class confirmation_solicitor_different_hash_Test;

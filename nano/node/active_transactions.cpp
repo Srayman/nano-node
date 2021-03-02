@@ -18,6 +18,8 @@ size_t constexpr nano::active_transactions::max_active_elections_frontier_insert
 
 constexpr std::chrono::minutes nano::active_transactions::expired_optimistic_election_info_cutoff;
 
+std::vector<std::pair<steady_clock::time_point, size_t>> cemented_samples;
+
 nano::active_transactions::active_transactions (nano::node & node_a, nano::confirmation_height_processor & confirmation_height_processor_a) :
 recently_dropped (node_a.stats),
 confirmation_height_processor (confirmation_height_processor_a),
@@ -27,7 +29,8 @@ trended_active_multiplier (1.0),
 generator (node_a.timestamps, node_a.config, node_a.ledger, node_a.wallets, node_a.vote_processor, node_a.history, node_a.network, node_a.stats),
 check_all_elections_period (node_a.network_params.network.is_dev_network () ? 10ms : 5s),
 election_time_to_live (node_a.network_params.network.is_dev_network () ? 0s : 2s),
-prioritized_cutoff (std::max<size_t> (1, node_a.config.active_elections_size / 10)),
+base_prioritized_cutoff (std::max<size_t> (1, node_a.config.active_elections_size / 100)),
+prioritized_cutoff (base_prioritized_cutoff),
 thread ([this]() {
 	nano::thread_role::set (nano::thread_role::name::request_loop);
 	request_loop ();
@@ -285,7 +288,7 @@ void nano::active_transactions::request_confirm (nano::unique_lock<std::mutex> &
 	debug_assert (lock_a.owns_lock ());
 
 	bool const check_all_elections_l (std::chrono::steady_clock::now () - last_check_all_elections > check_all_elections_period);
-	size_t const this_loop_target_l (check_all_elections_l ? roots.size () : prioritized_cutoff);
+	size_t const this_loop_target_l (check_all_elections_l ? roots.size () : prioritized_cutoff*10);
 	auto const elections_l{ list_active_impl (this_loop_target_l) };
 
 	lock_a.unlock ();
@@ -583,7 +586,16 @@ void nano::active_transactions::request_loop ()
 		lock.lock ();
 
 		const auto stamp_l = std::chrono::steady_clock::now ();
-
+		cemented_samples.emplace_back(stamp_l,node.ledger.cache.cemented_count.load ());
+		if(cemented_samples.size () > 10)
+		{
+			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cemented_samples.back ().first - cemented_samples.front ().first).count ();
+			auto cps = 1000 * (cemented_samples.back ().second - cemented_samples.front ().second) / duration ;
+			prioritized_cutoff = std::max<size_t>(base_prioritized_cutoff,cps * 1.1);
+			std::cout << cemented_samples.back ().first.time_since_epoch ().count () << " - CPS: " << cps << " - Prioritized: " << prioritized_cutoff << " - Samples: " << cemented_samples.size () << " - Cemented: " << cemented_samples.back ().second << " - Duration: " << duration << std::endl;
+			cemented_samples.erase(cemented_samples.begin ());
+		}
+		
 		// frontiers_confirmation should be above update_active_multiplier to ensure new sorted roots are updated
 		if (should_do_frontiers_confirmation ())
 		{
@@ -1146,6 +1158,8 @@ void nano::active_transactions::update_active_multiplier (nano::unique_lock<std:
 		{
 			last_prioritized_multiplier = prioritized.back ();
 		}
+		auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ());
+		node.logger.always_log (boost::str (boost::format ("Prioritized Multiplier,%1%,%2%,%3%,%4%,%5%") % timestamp.count () % roots.size () % prioritized.size () % multiplier %  last_prioritized_multiplier));
 	}
 	debug_assert (multiplier >= nano::difficulty::to_multiplier (node.network_params.network.publish_thresholds.entry, node.network_params.network.publish_thresholds.base));
 	multipliers_cb.push_front (multiplier);
@@ -1252,6 +1266,7 @@ void nano::active_transactions::erase_hash (nano::block_hash const & hash_a)
 {
 	nano::unique_lock<std::mutex> lock (mutex);
 	[[maybe_unused]] auto erased (blocks.erase (hash_a));
+	node.logger.always_log (boost::str (boost::format ("Active erase block %1%") % hash_a.to_string ()));
 	debug_assert (erased == 1);
 }
 

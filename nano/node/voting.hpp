@@ -46,6 +46,7 @@ class local_vote_history final
 		nano::root root;
 		nano::block_hash hash;
 		std::chrono::steady_clock::time_point time{ std::chrono::steady_clock::now () };
+		bool valid = true;
 		std::shared_ptr<nano::vote> vote;
 	};
 

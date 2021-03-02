@@ -52,9 +52,15 @@ void nano::local_vote_history::add (nano::root const & root_a, nano::block_hash 
 void nano::local_vote_history::erase (nano::root const & root_a)
 {
 	nano::lock_guard<std::mutex> guard (mutex);
-	auto & history_by_root (history.get<tag_root> ());
-	auto range (history_by_root.equal_range (root_a));
-	history_by_root.erase (range.first, range.second);
+	for (auto range = history.get<tag_root> ().equal_range (root_a); range.first != range.second; ++range.first)
+	{
+			auto item = *range.first;
+			item.valid = false;
+            history.replace(range.first,item);
+    }
+//	auto & history_by_root (history.get<tag_root> ());
+//	auto range (history_by_root.equal_range (root_a));
+//	history_by_root.erase (range.first, range.second);
 }
 
 std::vector<std::shared_ptr<nano::vote>> nano::local_vote_history::votes (nano::root const & root_a) const
@@ -62,7 +68,9 @@ std::vector<std::shared_ptr<nano::vote>> nano::local_vote_history::votes (nano::
 	nano::lock_guard<std::mutex> guard (mutex);
 	std::vector<std::shared_ptr<nano::vote>> result;
 	auto range (history.get<tag_root> ().equal_range (root_a));
-	std::transform (range.first, range.second, std::back_inserter (result), [](auto const & entry) { return entry.vote; });
+	nano::transform_if (range.first, range.second, std::back_inserter (result), 
+		[](auto const & entry) { return entry.valid == true; },
+		[](auto const & entry) { return entry.vote; });
 	return result;
 }
 
@@ -73,7 +81,7 @@ std::vector<std::shared_ptr<nano::vote>> nano::local_vote_history::votes (nano::
 	auto range (history.get<tag_root> ().equal_range (root_a));
 	// clang-format off
 	nano::transform_if (range.first, range.second, std::back_inserter (result),
-		[&hash_a](auto const & entry) { return entry.hash == hash_a; },
+		[&hash_a](auto const & entry) { return entry.hash == hash_a && entry.valid == true; },
 		[](auto const & entry) { return entry.vote; });
 	// clang-format on
 	return result;

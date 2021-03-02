@@ -78,6 +78,14 @@ void nano::rep_crawler::validate ()
 
 void nano::rep_crawler::ongoing_crawl ()
 {
+	if(node.config.enable_voting && node.wallets.reps ().voting > 0)
+	{
+		nano::wallet_representatives representatives_l = node.wallets.reps ();
+		for (auto & account : representatives_l.accounts)
+		{
+			node.online_reps.observe (account);
+		}
+	}
 	auto now (std::chrono::steady_clock::now ());
 	auto total_weight_l (total_weight ());
 	cleanup_reps ();

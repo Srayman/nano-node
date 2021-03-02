@@ -369,6 +369,10 @@ nano::websocket::topic to_topic (std::string const & topic_a)
 	{
 		topic = nano::websocket::topic::stopped_election;
 	}
+	else if (topic_a == "quorum_change")
+	{
+		topic = nano::websocket::topic::quorum_change;
+	}
 	else if (topic_a == "vote")
 	{
 		topic = nano::websocket::topic::vote;
@@ -411,6 +415,10 @@ std::string from_topic (nano::websocket::topic topic_a)
 	else if (topic_a == nano::websocket::topic::stopped_election)
 	{
 		topic = "stopped_election";
+	}
+	else if (topic_a == nano::websocket::topic::quorum_change)
+	{
+		topic = "quorum_change";
 	}
 	else if (topic_a == nano::websocket::topic::vote)
 	{
@@ -687,6 +695,37 @@ nano::websocket::message nano::websocket::message_builder::stopped_election (nan
 
 	boost::property_tree::ptree message_node_l;
 	message_node_l.add ("hash", hash_a.to_string ());
+	message_l.contents.add_child ("message", message_node_l);
+
+	return message_l;
+}
+
+nano::websocket::message nano::websocket::message_builder::quorum_change (nano::root const & root_a, nano::election_status const & election_status_a, std::vector<nano::vote_with_weight_info> const & election_votes_a)
+{
+	nano::websocket::message message_l (nano::websocket::topic::quorum_change);
+	set_common_fields (message_l);
+
+	boost::property_tree::ptree message_node_l;
+	boost::property_tree::ptree election_node_l;
+	election_node_l.add ("tally", election_status_a.tally.to_string_dec ());
+	election_node_l.add ("root", root_a.to_string ());
+	election_node_l.add ("time", std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ());
+
+	boost::property_tree::ptree election_votes_l;
+	for (auto const & vote_l : election_votes_a)
+	{
+		boost::property_tree::ptree entry;
+		entry.put ("representative", vote_l.representative.to_account ());
+		entry.put ("timestamp", vote_l.timestamp);
+		entry.put ("sequence", vote_l.timestamp);
+		entry.put ("hash", vote_l.hash.to_string ());
+		entry.put ("weight", vote_l.weight.convert_to<std::string> ());
+		election_votes_l.push_back (std::make_pair ("", entry));
+	}
+	election_node_l.add_child ("votes", election_votes_l);
+
+	message_node_l.add_child ("election_info", election_node_l);
+
 	message_l.contents.add_child ("message", message_node_l);
 
 	return message_l;

@@ -156,7 +156,7 @@ nano::node_constants::node_constants (nano::network_constants & network_constant
 }
 
 nano::voting_constants::voting_constants (nano::network_constants & network_constants) :
-max_cache{ network_constants.is_dev_network () ? 256U : 128U * 1024 },
+max_cache{ network_constants.is_dev_network () ? 256U : 128U * 40 },
 delay{ network_constants.is_dev_network () ? 1 : 15 }
 {
 }
@@ -368,6 +368,11 @@ bool nano::unchecked_info::deserialize (nano::stream & stream_a)
 		}
 	}
 	return error;
+}
+
+bool nano::unchecked_info::operator< (nano::unchecked_info const & info_a) const
+{
+	return block->difficulty () < info_a.block->difficulty ();
 }
 
 nano::endpoint_key::endpoint_key (const std::array<uint8_t, 16> & address_a, uint16_t port_a) :

@@ -34,6 +34,8 @@ public:
 	nano::uint128_t online () const;
 	/** Returns the quorum required for confirmation*/
 	nano::uint128_t delta () const;
+	/** Returns the quorum required for flipping winner*/
+	nano::uint128_t delta_change () const;
 	/** List of online representatives, both the currently sampling ones and the ones observed in the previous sampling period */
 	std::vector<nano::account> list ();
 	void clear ();

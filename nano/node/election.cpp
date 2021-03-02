@@ -182,13 +182,16 @@ bool nano::election::transition_time (nano::confirmation_solicitor & solicitor_a
 	switch (state_m)
 	{
 		case nano::election::state_t::passive:
-			if (base_latency () * passive_duration_factor < std::chrono::steady_clock::now ().time_since_epoch () - state_start.load ())
+			if (prioritized_m && base_latency () * passive_duration_factor < std::chrono::steady_clock::now ().time_since_epoch () - state_start.load ())
 			{
 				state_change (nano::election::state_t::passive, nano::election::state_t::active);
 			}
 			break;
 		case nano::election::state_t::active:
-			send_confirm_req (solicitor_a);
+			if(prioritized_m)
+			{
+				send_confirm_req (solicitor_a);
+			}
 			if (confirmation_request_count > active_request_count_min)
 			{
 				state_change (nano::election::state_t::active, nano::election::state_t::broadcasting);
@@ -237,6 +240,19 @@ bool nano::election::have_quorum (nano::tally_t const & tally_a) const
 	auto second (i != tally_a.end () ? i->first : 0);
 	auto delta_l (node.online_reps.delta ());
 	bool result{ tally_a.begin ()->first >= (second + delta_l) };
+	std::stringstream tally;
+	std::string line_end (node.config.logging.single_line_record () ? "\t" : "\n");
+	tally << boost::str (boost::format ("%1%Delta %2%") % line_end % node.online_reps.delta ().convert_to<std::string> ());
+	tally << boost::str (boost::format ("%1%Block %2% weight %3%") % line_end % tally_a.begin ()->second->hash ().to_string () % tally_a.begin ()->first.convert_to<std::string> ());
+	if(i != tally_a.end ())
+	{
+		tally << boost::str (boost::format ("%1%Block %2% weight %3%") % line_end % i->second->hash ().to_string () % i->first.convert_to<std::string> ());
+	}
+	tally << boost::str (boost::format ("%1%Result = %2%") % line_end % (result ? "true": "false"));
+	node.logger.try_log (tally.str ());
+	auto status_l = status;
+    auto votes_l = votes_with_weight (true);
+    node.observers.quorum_change.notify(root, status_l, votes_l);
 	return result;
 }
 
@@ -281,13 +297,13 @@ void nano::election::confirm_if_quorum (nano::unique_lock<std::mutex> & lock_a)
 	{
 		sum += i.first;
 	}
-	if (sum >= node.online_reps.delta () && winner_hash_l != status_winner_hash_l)
+	if (sum >= node.online_reps.delta_change () && winner_hash_l != status_winner_hash_l)
 	{
 		status.winner = block_l;
 		remove_votes (status_winner_hash_l);
 		node.block_processor.force (block_l);
 	}
-	if (have_quorum (tally_l))
+	if (have_quorum (tally_l) && winner_hash_l == status.winner->hash () )
 	{
 		if (node.config.logging.vote_logging () || (node.config.logging.election_fork_tally_logging () && last_blocks.size () > 1))
 		{
@@ -485,6 +501,7 @@ void nano::election::prioritize (nano::vote_generator_session & generator_sessio
 	debug_assert (!prioritized_m);
 	if (!prioritized_m.exchange (true))
 	{
+		state_start = std::chrono::steady_clock::now ().time_since_epoch ();
 		generator_session_a.add (root, status.winner->hash ());
 	}
 }
@@ -548,6 +565,7 @@ void nano::election::remove_block (nano::block_hash const & hash_a)
 				}
 			}
 			node.network.publish_filter.clear (existing->second);
+			node.logger.always_log (boost::str (boost::format ("Election erase block %1%") % hash_a.to_string ()));
 			last_blocks.erase (hash_a);
 		}
 	}
@@ -628,11 +646,16 @@ std::unordered_map<nano::account, nano::vote_info> nano::election::votes () cons
 	return last_votes;
 }
 
-std::vector<nano::vote_with_weight_info> nano::election::votes_with_weight () const
+std::vector<nano::vote_with_weight_info> nano::election::votes_with_weight (bool local_a) const
 {
 	std::multimap<nano::uint128_t, nano::vote_with_weight_info, std::greater<nano::uint128_t>> sorted_votes;
 	std::vector<nano::vote_with_weight_info> result;
-	auto votes_l (votes ());
+	std::unordered_map<nano::account, nano::vote_info> votes_l;
+    if (local_a){
+            votes_l = last_votes;
+    }else {
+            votes_l = votes ();
+    }
 	for (auto const & vote_l : votes_l)
 	{
 		if (vote_l.first != node.network_params.random.not_an_account)

@@ -12,6 +12,7 @@
 
 #include <chrono>
 #include <memory>
+#include <queue>
 #include <unordered_set>
 
 namespace nano
@@ -53,7 +54,8 @@ public:
 	size_t size ();
 	bool full ();
 	bool half_full ();
-	void add (nano::unchecked_info const &, const bool = false);
+	void add_local (nano::unchecked_info const & info_a, bool const = false);
+	void add (nano::unchecked_info const &, bool const = false);
 	void add (std::shared_ptr<nano::block> const &, uint64_t = 0);
 	void force (std::shared_ptr<nano::block> const &);
 	void update (std::shared_ptr<nano::block> const &);
@@ -74,12 +76,12 @@ private:
 	void process_live (nano::transaction const &, nano::block_hash const &, std::shared_ptr<nano::block> const &, nano::process_return const &, const bool = false, nano::block_origin const = nano::block_origin::remote);
 	void process_old (nano::transaction const &, std::shared_ptr<nano::block> const &, nano::block_origin const);
 	void requeue_invalid (nano::block_hash const &, nano::unchecked_info const &);
-	void process_verified_state_blocks (std::deque<nano::unchecked_info> &, std::vector<int> const &, std::vector<nano::block_hash> const &, std::vector<nano::signature> const &);
+	void process_verified_state_blocks (std::deque<std::pair<nano::unchecked_info, bool>> &, std::vector<int> const &, std::vector<nano::block_hash> const &, std::vector<nano::signature> const &);
 	bool stopped{ false };
 	bool active{ false };
 	bool awaiting_write{ false };
 	std::chrono::steady_clock::time_point next_log;
-	std::deque<nano::unchecked_info> blocks;
+	std::priority_queue<std::pair<nano::unchecked_info, bool>, std::deque<std::pair<nano::unchecked_info, bool>>> blocks;
 	std::deque<std::shared_ptr<nano::block>> forced;
 	std::deque<std::shared_ptr<nano::block>> updates;
 	nano::condition_variable condition;
@@ -89,6 +91,8 @@ private:
 	nano::state_block_signature_verification state_block_signature_verification;
 
 	friend std::unique_ptr<container_info_component> collect_container_info (block_processor & block_processor, const std::string & name);
+
+	friend class node_block_processor_priority_Test;
 };
 std::unique_ptr<nano::container_info_component> collect_container_info (block_processor & block_processor, const std::string & name);
 }
