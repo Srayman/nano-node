@@ -4404,29 +4404,34 @@ TEST (node, deferred_dependent_elections)
 	ASSERT_TIMELY (2s, node2.block (open->hash ()));
 	ASSERT_TIMELY (2s, node2.block (send2->hash ()));
 
-	// Re-processing older blocks with updated work also does not start an election
+	// Processing older blocks with updated work should start an election but not confirm
 	node.work_generate_blocking (*open, open->difficulty () + 1);
 	node.process_local (open, false);
 	node.block_processor.flush ();
-	ASSERT_FALSE (node.active.active (open->qualified_root ()));
+	ASSERT_TRUE (node.active.active (open->qualified_root ()));
 	/// However, work is still updated
 	ASSERT_TIMELY (3s, node.store.block_get (node.store.tx_begin_read (), open->hash ())->block_work () == open->block_work ());
+	ASSERT_FALSE (node.block_confirmed (open->hash ()));
 
-	// It is however possible to manually start an election from elsewhere
+	node.active.erase (*open);
+	ASSERT_FALSE (node.active.active (open->qualified_root ()));
+
+	// Should also be able to manually start an election
 	node.block_confirm (open);
 	ASSERT_TRUE (node.active.active (open->qualified_root ()));
 
 	// Dropping an election allows restarting it [with higher work]
 	node.active.erase (*open);
 	ASSERT_FALSE (node.active.active (open->qualified_root ()));
-	/// The election was dropped but it's still not possible to restart it
+	/// The election was dropped and can be restarted with higher work but not confirm if dependents are not confirmed
 	node.work_generate_blocking (*open, open->difficulty () + 1);
 	ASSERT_FALSE (node.active.active (open->qualified_root ()));
 	node.process_local (open, false);
 	node.block_processor.flush ();
-	ASSERT_FALSE (node.active.active (open->qualified_root ()));
+	ASSERT_TRUE (node.active.active (open->qualified_root ()));
 	/// However, work is still updated
 	ASSERT_TIMELY (3s, node.store.block_get (node.store.tx_begin_read (), open->hash ())->block_work () == open->block_work ());
+	ASSERT_FALSE (node.block_confirmed (open->hash ()));
 
 	// Frontier confirmation also starts elections
 	ASSERT_NO_ERROR (system.poll_until_true (5s, [&node, &send2] {

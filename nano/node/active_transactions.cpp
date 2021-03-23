@@ -984,16 +984,12 @@ bool nano::active_transactions::restart (std::shared_ptr<nano::block> const & bl
 			debug_assert (node.ledger.cache.block_count.load () == block_count);
 
 			// Restart election for the upgraded block, previously dropped from elections
-			if (node.ledger.dependents_confirmed (transaction_a, *ledger_block))
+			auto previous_balance = node.ledger.balance (transaction_a, ledger_block->previous ());
+			auto insert_result = insert (ledger_block, previous_balance);
+			if (insert_result.inserted)
 			{
-				// Restart election for the upgraded block, previously dropped from elections
-				auto previous_balance = node.ledger.balance (transaction_a, ledger_block->previous ());
-				auto insert_result = insert (ledger_block, previous_balance);
-				if (insert_result.inserted)
-				{
-					error = false;
-					node.stats.inc (nano::stat::type::election, nano::stat::detail::election_restart);
-				}
+				error = false;
+				node.stats.inc (nano::stat::type::election, nano::stat::detail::election_restart);
 			}
 		}
 	}
