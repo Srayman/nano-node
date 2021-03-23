@@ -1342,7 +1342,7 @@ nano::inactive_cache_status nano::active_transactions::inactive_votes_bootstrap_
 	 * That check is made after hitting a tally threshold, and always as late and as few times as possible
 	 */
 	nano::inactive_cache_status status (previously_a);
-	const unsigned election_start_voters_min = node.network_params.network.is_test_network () ? 1 : node.network_params.network.is_beta_network () ? 5 : 15;
+	const unsigned election_start_voters_min = node.network_params.network.is_test_network () ? 2 : node.network_params.network.is_beta_network () ? 5 : 15;
 	nano::uint128_t tally;
 	for (auto const & voter : voters_a)
 	{
