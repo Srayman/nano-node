@@ -1342,7 +1342,7 @@ nano::inactive_cache_status nano::active_transactions::inactive_votes_bootstrap_
 	 * That check is made after hitting a tally threshold, and always as late and as few times as possible
 	 */
 	nano::inactive_cache_status status (previously_a);
-	constexpr unsigned election_start_voters_min{ 5 };
+	const unsigned election_start_voters_min = node.network_params.network.is_test_network () ? 1 : node.network_params.network.is_beta_network () ? 5 : 15;
 	nano::uint128_t tally;
 	for (auto const & voter : voters_a)
 	{
@@ -1369,10 +1369,7 @@ nano::inactive_cache_status nano::active_transactions::inactive_votes_bootstrap_
 		auto block = node.store.block_get (transaction, hash_a);
 		if (block && status.election_started && !previously_a.election_started && !node.block_confirmed_or_being_confirmed (transaction, hash_a))
 		{
-			if (node.ledger.cache.cemented_count >= node.ledger.bootstrap_weight_max_blocks)
-			{
-				insert_impl (block);
-			}
+			insert_impl (block);
 		}
 		else if (!block && status.bootstrap_started && !previously_a.bootstrap_started)
 		{
