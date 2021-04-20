@@ -1,12 +1,13 @@
 #include <nano/node/confirmation_solicitor.hpp>
 #include <nano/node/election.hpp>
 #include <nano/node/nodeconfig.hpp>
+#include <nano/node/node.hpp>
 
 using namespace std::chrono_literals;
 
 nano::confirmation_solicitor::confirmation_solicitor (nano::network & network_a, nano::node_config const & config_a) :
 max_block_broadcasts (config_a.network_params.network.is_dev_network () ? 4 : 30),
-max_election_requests (50),
+max_election_requests (80),
 max_election_broadcasts (std::max<size_t> (network_a.fanout () / 2, 1)),
 network (network_a),
 config (config_a)
@@ -57,7 +58,7 @@ bool nano::confirmation_solicitor::add (nano::election const & election_a)
 	debug_assert (prepared);
 	bool error (true);
 	unsigned count = 0;
-	auto const max_channel_requests (config.confirm_req_batches_max * nano::network::confirm_req_hashes_max);
+	auto const max_channel_requests (1 * nano::network::confirm_req_hashes_max);
 	auto const & hash (election_a.status.winner->hash ());
 	for (auto i (representatives_requests.begin ()); i != representatives_requests.end () && count < max_election_requests;)
 	{

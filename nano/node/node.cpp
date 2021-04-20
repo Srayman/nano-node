@@ -314,13 +314,17 @@ node_seq (seq)
 		if (websocket_server)
 		{
 			observers.vote.add ([this](std::shared_ptr<nano::vote> vote_a, std::shared_ptr<nano::transport::channel> const & channel_a, nano::vote_code code_a) {
+			if(code_a == nano::vote_code::vote)
+			{
 				if (this->websocket_server->any_subscriber (nano::websocket::topic::vote))
 				{
 					nano::websocket::message_builder builder;
 					auto msg (builder.vote_received (vote_a, code_a));
 					this->websocket_server->broadcast (msg);
 				}
+			}
 			});
+			
 		}
 		// Cancelling local work generation
 		observers.work_cancel.add ([this](nano::root const & root_a) {
@@ -1276,6 +1280,7 @@ void nano::node::add_initial_peers ()
 
 void nano::node::block_confirm (std::shared_ptr<nano::block> const & block_a)
 {
+	active.erase (*block_a);
 	auto election = active.insert (block_a);
 	if (election.inserted)
 	{

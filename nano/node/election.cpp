@@ -40,6 +40,7 @@ void nano::election::confirm_once (nano::unique_lock<nano::mutex> & lock_a, nano
 	nano::unique_lock<nano::mutex> election_winners_lk (node.active.election_winner_details_mutex);
 	if (state_m.exchange (nano::election::state_t::confirmed) != nano::election::state_t::confirmed && (node.active.election_winner_details.count (status.winner->hash ()) == 0))
 	{
+		state_start = std::chrono::steady_clock::now ().time_since_epoch ();
 		node.active.election_winner_details.emplace (status.winner->hash (), shared_from_this ());
 		election_winners_lk.unlock ();
 		status.election_end = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now ().time_since_epoch ());
@@ -138,7 +139,7 @@ bool nano::election::state_change (nano::election::state_t expected_a, nano::ele
 
 void nano::election::send_confirm_req (nano::confirmation_solicitor & solicitor_a)
 {
-	if ((base_latency () * (optimistic () ? 10 : 5)) < (std::chrono::steady_clock::now () - last_req))
+	if ((base_latency () * 10)  < (std::chrono::steady_clock::now () - last_req))
 	{
 		nano::lock_guard<nano::mutex> guard (mutex);
 		if (!solicitor_a.add (*this))
@@ -166,7 +167,7 @@ bool nano::election::failed () const
 
 void nano::election::broadcast_block (nano::confirmation_solicitor & solicitor_a)
 {
-	if (base_latency () * 15 < std::chrono::steady_clock::now () - last_block)
+	if (base_latency () * 45 < std::chrono::steady_clock::now () - last_block)
 	{
 		nano::lock_guard<nano::mutex> guard (mutex);
 		if (!solicitor_a.broadcast (*this))
@@ -182,7 +183,7 @@ bool nano::election::transition_time (nano::confirmation_solicitor & solicitor_a
 	switch (state_m)
 	{
 		case nano::election::state_t::passive:
-			if (base_latency () * passive_duration_factor < std::chrono::steady_clock::now ().time_since_epoch () - state_start.load ())
+			if (base_latency () < std::chrono::steady_clock::now ().time_since_epoch () - state_start.load ())
 			{
 				state_change (nano::election::state_t::passive, nano::election::state_t::active);
 			}
@@ -201,13 +202,18 @@ bool nano::election::transition_time (nano::confirmation_solicitor & solicitor_a
 		case nano::election::state_t::confirmed:
 			if (base_latency () * confirmed_duration_factor < std::chrono::steady_clock::now ().time_since_epoch () - state_start.load ())
 			{
-				result = true;
+//				result = true;
 				state_change (nano::election::state_t::confirmed, nano::election::state_t::expired_confirmed);
 			}
 			break;
 		case nano::election::state_t::expired_unconfirmed:
 		case nano::election::state_t::expired_confirmed:
 			debug_assert (false);
+			if (base_latency () * 15 * confirmed_duration_factor < std::chrono::steady_clock::now ().time_since_epoch () - state_start.load ())
+			{
+				result = true;
+				state_change (nano::election::state_t::confirmed, nano::election::state_t::expired_confirmed);
+			}
 			break;
 	}
 	auto const optimistic_expiration_time = node.network_params.network.is_dev_network () ? 500 : 60 * 1000;

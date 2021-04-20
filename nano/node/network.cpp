@@ -177,7 +177,7 @@ void nano::network::flood_message (nano::message const & message_a, nano::buffer
 void nano::network::flood_block (std::shared_ptr<nano::block> const & block_a, nano::buffer_drop_policy const drop_policy_a)
 {
 	nano::publish message (block_a);
-	flood_message (message, drop_policy_a);
+	flood_message (message, drop_policy_a, 0.25);
 }
 
 void nano::network::flood_block_initial (std::shared_ptr<nano::block> const & block_a)
@@ -187,25 +187,47 @@ void nano::network::flood_block_initial (std::shared_ptr<nano::block> const & bl
 	{
 		i.channel->send (message, nullptr, nano::buffer_drop_policy::no_limiter_drop);
 	}
-	for (auto & i : list_non_pr (fanout (1.0)))
-	{
-		i->send (message, nullptr, nano::buffer_drop_policy::no_limiter_drop);
-	}
+//	for (auto & i : list_non_pr (fanout (1.0)))
+//	{
+//		i->send (message, nullptr, nano::buffer_drop_policy::no_limiter_drop);
+//	}
 }
 
 void nano::network::flood_vote (std::shared_ptr<nano::vote> const & vote_a, float scale)
 {
+//	flood_vote_pr (vote_a);
 	nano::confirm_ack message (vote_a);
-	for (auto & i : list (fanout (scale)))
+	auto reps = node.rep_crawler.principal_representatives ();
+	if (reps.size () > 1 )
 	{
-		i->send (message, nullptr);
+		nano::random_pool_shuffle (reps.begin (), reps.end ());
+		reps.resize(1);
+	}
+//	for (auto & i : list (fanout (scale)))
+	for (auto & i : reps)
+	{
+		i.channel->send (message, nullptr, nano::buffer_drop_policy::no_limiter_drop);
 	}
 }
 
 void nano::network::flood_vote_pr (std::shared_ptr<nano::vote> const & vote_a)
 {
 	nano::confirm_ack message (vote_a);
-	for (auto const & i : node.rep_crawler.principal_representatives ())
+	auto reps = node.rep_crawler.principal_representatives ();
+        if (reps.size () > 85 )
+        {
+                reps.resize(85);
+        }
+	for (auto const & i : reps)
+	{
+		i.channel->send (message, nullptr, nano::buffer_drop_policy::no_limiter_drop);
+	}
+//	for (auto & i : list_non_pr (fanout (5)))
+	for (auto & i : list_non_pr (20))
+	{
+		 i->send (message, nullptr);
+	}
+	for (auto const & i : reps)
 	{
 		i.channel->send (message, nullptr, nano::buffer_drop_policy::no_limiter_drop);
 	}
@@ -217,7 +239,7 @@ void nano::network::flood_block_many (std::deque<std::shared_ptr<nano::block>> b
 	{
 		auto block_l (blocks_a.front ());
 		blocks_a.pop_front ();
-		flood_block (block_l);
+		flood_block_initial (block_l);
 		if (!blocks_a.empty ())
 		{
 			std::weak_ptr<nano::node> node_w (node.shared ());

@@ -90,6 +90,8 @@ public:
 	void receive_minimum_set ();
 	void representatives ();
 	void representatives_online ();
+	void tracker ();
+	void conf_height_clear ();
 	void republish ();
 	void search_pending ();
 	void search_pending_all ();

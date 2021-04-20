@@ -152,7 +152,6 @@ public:
 	// clang-format on
 	ordered_roots roots;
 	using roots_iterator = active_transactions::ordered_roots::index_iterator<tag_root>::type;
-
 	explicit active_transactions (nano::node &, nano::confirmation_height_processor &);
 	~active_transactions ();
 	// Start an election for a block
@@ -194,6 +193,8 @@ public:
 	std::unordered_map<nano::block_hash, std::shared_ptr<nano::election>> blocks;
 	std::deque<nano::election_status> list_recently_cemented ();
 	std::deque<nano::election_status> recently_cemented;
+	std::vector<std::string> search_account;
+	void set_search_account (std::vector<std::string> const &);
 
 	void add_recently_cemented (nano::election_status const &);
 	void add_recently_confirmed (nano::qualified_root const &, nano::block_hash const &);

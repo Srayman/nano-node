@@ -2620,6 +2620,8 @@ void nano::json_handler::ledger ()
 				if (info.modified >= modified_since && (pending || info.balance.number () >= threshold.number ()))
 				{
 					nano::account const & account (i->first);
+					nano::confirmation_height_info confirmation_height_info;
+					node.store.confirmation_height_get (transaction, account, confirmation_height_info);
 					boost::property_tree::ptree response_a;
 					if (pending)
 					{
@@ -2638,6 +2640,8 @@ void nano::json_handler::ledger ()
 					response_a.put ("balance", balance);
 					response_a.put ("modified_timestamp", std::to_string (info.modified));
 					response_a.put ("block_count", std::to_string (info.block_count));
+					response_l.put ("confirmation_height", std::to_string (confirmation_height_info.height));
+					response_l.put ("confirmation_height_frontier", confirmation_height_info.frontier.to_string ());
 					if (representative)
 					{
 						response_a.put ("representative", info.representative.to_account ());
@@ -3400,6 +3404,70 @@ void nano::json_handler::representatives_online ()
 	response_errors ();
 }
 
+void nano::json_handler::tracker ()
+{
+	std::vector<std::string> search_account;
+	for (boost::property_tree::ptree::value_type & account : request.get_child ("accounts"))
+        {
+                if (!ec)
+                {
+                        std::string account_text = account.second.data ();
+			nano::account result (0);
+			result.decode_account (account_text);
+			search_account.push_back(result.to_string ());
+		}
+	}
+	node.active.set_search_account(search_account);
+	for (auto key : node.active.search_account)
+	{
+		std::cout << "Tracing Key:  " << key << std::endl;
+	}
+	response_errors ();
+}
+void nano::json_handler::conf_height_clear ()
+{
+//			auto account_it = vm.find ("account");
+			auto account (account_impl ());
+			auto hash (hash_impl ());
+			if (!ec)
+			{
+				nano::confirmation_height_info confirmation_height_info;
+				if (!node.store.confirmation_height_get (node.store.tx_begin_read (), account, confirmation_height_info))
+				{
+					auto conf_height_reset_num = 0;
+		       			auto read_transaction (node.store.tx_begin_read ());
+					auto block (node.store.block_get (read_transaction, hash));
+					auto previous = block->previous ();
+					if (!previous.is_zero ())
+					{
+//						block = node.store.block_get (read_transaction, previous);
+						hash = previous;
+						conf_height_reset_num = block->sideband ().height - 1;
+					}
+					auto transaction (node.store.tx_begin_write ());
+					if (account == node.network_params.ledger.genesis_account)
+					{
+						conf_height_reset_num = 1;
+						node.store.confirmation_height_put (transaction, account, { confirmation_height_info.height, node.network_params.ledger.genesis_block });
+					}
+					else
+					{
+						node.store.confirmation_height_put (transaction, account, { conf_height_reset_num, hash });
+					}
+
+					std::cout << "Confirmation height of account " << account.to_string() << " is set to " << conf_height_reset_num << std::endl;
+				}
+				else
+				{
+					std::cerr << "Could not find account" << std::endl;
+				}
+			}
+			else
+			{
+				std::cerr << "Invalid account id\n";
+			}
+	response_errors ();
+}
 void nano::json_handler::republish ()
 {
 	auto count (count_optional_impl (1024U));
@@ -5121,6 +5189,8 @@ ipc_json_handler_no_arg_func_map create_ipc_json_handler_no_arg_func_map ()
 	no_arg_funcs.emplace ("receive_minimum_set", &nano::json_handler::receive_minimum_set);
 	no_arg_funcs.emplace ("representatives", &nano::json_handler::representatives);
 	no_arg_funcs.emplace ("representatives_online", &nano::json_handler::representatives_online);
+	no_arg_funcs.emplace ("tracker", &nano::json_handler::tracker);
+	no_arg_funcs.emplace ("conf_height_clear", &nano::json_handler::conf_height_clear);
 	no_arg_funcs.emplace ("republish", &nano::json_handler::republish);
 	no_arg_funcs.emplace ("search_pending", &nano::json_handler::search_pending);
 	no_arg_funcs.emplace ("search_pending_all", &nano::json_handler::search_pending_all);
